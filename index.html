@@ -208,14 +208,27 @@
                 <div class="bg-blue-600 p-2 rounded-lg">
                     <i data-lucide="bar-chart-3" class="w-6 h-6 text-white"></i>
                 </div>
-                <h1 class="text-2xl font-bold text-white">Perkembangan Halaqoh Santri</h1>
+                <h1 class="text-2xl font-bold text-white">Perkembangan Hafalan Santri</h1>
             </div>
             <div class="flex items-center gap-4">
+                <!-- Filter Type Selection -->
+                <select id="filterType" class="form-select w-full sm:w-auto">
+                    <option value="month">Per Bulan</option>
+                    <option value="range">Rentang Waktu</option>
+                </select>
+
+                <!-- Month Filter (visible by default) -->
                 <select id="monthFilter" class="form-select w-full sm:w-48"></select>
+                
+                <!-- Date Range Filters (hidden by default) -->
+                <input type="date" id="startDateFilter" class="form-input w-full sm:w-48 hidden">
+                <input type="date" id="endDateFilter" class="form-input w-full sm:w-48 hidden">
+
                 <button id="exportBtn" class="btn btn-primary" disabled>
                     <i data-lucide="download" class="w-4 h-4 mr-2"></i>
                     <span>Ekspor</span>
                 </button>
+                <!-- Re-added "Hapus Data" button -->
                 <button id="openDeleteDataModalBtn" class="btn btn-danger">
                     <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
                     <span>Hapus Data</span>
@@ -225,6 +238,7 @@
 
         <!-- Class Filter Buttons -->
         <div id="classFilterContainer" class="flex flex-wrap items-center gap-2 mb-4">
+            <p class="text-gray-400">Pilih kelas untuk melihat data:</p>
             <!-- Tombol filter kelas akan dimasukkan di sini oleh JavaScript -->
         </div>
 
@@ -272,7 +286,12 @@
         </div>
     </div>
 
-    <!-- Bulk Delete Modal -->
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">
+        <p id="toastMessage"></p>
+    </div>
+
+    <!-- Bulk Delete Modal (re-added) -->
     <div id="deleteDataModal" class="modal-backdrop">
         <div class="modal-content">
             <div class="flex justify-between items-center mb-4">
@@ -289,6 +308,7 @@
                 
                 <div class="space-y-2">
                     <label class="font-semibold block">Pilih data yang ingin dihapus:</label>
+                    <!-- Checkboxes for all data types as per image -->
                     <label class="flex items-center gap-2 p-2 rounded-md hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" name="deleteOptions" value="mentors" class="form-checkbox"> Data Pembimbing</label>
                     <label class="flex items-center gap-2 p-2 rounded-md hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" name="deleteOptions" value="classes" class="form-checkbox"> Data Kelas</label>
                     <label class="flex items-center gap-2 p-2 rounded-md hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" name="deleteOptions" value="students" class="form-checkbox"> Data Santri</label>
@@ -320,16 +340,28 @@
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="toast">
-        <p id="toastMessage"></p>
-    </div>
 
     <script type="module">
         // --- Firebase SDK Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query, where, Timestamp, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, where, doc, Timestamp, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Utility Functions ---
+        function toLocalDateString(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        function getMonthName(monthIndex) {
+            const months = [
+                "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+            ];
+            return months[parseInt(monthIndex, 10)];
+        }
 
         // --- Firebase Configuration ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -356,18 +388,23 @@
         let allHalaqohGroups = [];
         let allClasses = [];
         let compiledRecapData = [];
-        let activeClassFilter = 'all';
-        let dataReady = { students: false, mentors: false, halaqohGroups: false, classes: false };
+        let activeClassFilter = null; // Changed to null, no default 'all' filter active initially
 
         // --- DOM Elements ---
         const dom = {
+            filterType: document.getElementById('filterType'),
             monthFilter: document.getElementById('monthFilter'),
+            startDateFilter: document.getElementById('startDateFilter'),
+            endDateFilter: document.getElementById('endDateFilter'),
             exportBtn: document.getElementById('exportBtn'),
             rekapTable: document.getElementById('rekapTable'),
             rekapTableBody: document.getElementById('rekapTableBody'),
             rekapLoader: document.getElementById('rekapLoader'),
             emptyState: document.getElementById('emptyState'),
             classFilterContainer: document.getElementById('classFilterContainer'),
+            toast: document.getElementById('toast'),
+            toastMessage: document.getElementById('toastMessage'),
+            // Re-added delete modal elements
             openDeleteDataModalBtn: document.getElementById('openDeleteDataModalBtn'),
             deleteDataModal: document.getElementById('deleteDataModal'),
             closeDeleteDataModalBtn: document.getElementById('closeDeleteDataModalBtn'),
@@ -381,32 +418,29 @@
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUserId = user.uid;
-                populateMonthFilter();
                 preloadData();
             } else {
                 try {
                     await (initialAuthToken ? signInWithCustomToken(auth, initialAuthToken) : signInAnonymously(auth));
                 } catch (error) {
                     console.error("Authentication error:", error);
+                    showToast("Error autentikasi: " + error.message, true);
                 }
             }
         });
 
         // --- Data Fetching and Processing ---
 
-        function tryFetchRecapData() {
-            if (Object.values(dataReady).every(status => status === true)) {
-                fetchRecapData();
-            }
-        }
-
         function preloadData() {
             const collectionsToLoad = {
                 students: 'students',
                 mentors: 'mentors',
                 halaqohGroups: 'halaqohGroups',
-                classes: 'classes'
+                classes: 'classes',
             };
+
+            let dataLoadedCount = 0;
+            const totalCollections = Object.keys(collectionsToLoad).length;
 
             Object.entries(collectionsToLoad).forEach(([stateKey, collectionName]) => {
                 const q = query(collection(db, 'artifacts', appId, 'public', 'data', collectionName));
@@ -419,16 +453,39 @@
                         allClasses = data;
                         populateClassFilterButtons();
                     }
-                    dataReady[stateKey] = true;
-                    tryFetchRecapData();
+                    dataLoadedCount++;
+                    if (dataLoadedCount === totalCollections) {
+                        populateMonthFilter();
+                        // Initial state: Hide table, show empty state, hide loader
+                        dom.rekapTable.classList.add('hidden');
+                        dom.rekapLoader.style.display = 'none';
+                        dom.emptyState.classList.remove('hidden');
+                    }
                 });
             });
         }
 
         function fetchRecapData() {
-            const [year, month] = dom.monthFilter.value.split('-').map(Number);
-            const startDate = new Date(year, month - 1, 1);
-            const endDate = new Date(year, month, 0, 23, 59, 59);
+            // Only fetch data if a class filter is active
+            if (activeClassFilter === null) {
+                dom.rekapLoader.style.display = 'none';
+                dom.emptyState.classList.remove('hidden');
+                dom.rekapTable.classList.add('hidden');
+                dom.exportBtn.disabled = true;
+                return;
+            }
+
+            let startDate, endDate;
+            const filterType = dom.filterType.value;
+
+            if (filterType === 'month') {
+                const [year, month] = dom.monthFilter.value.split('-').map(Number);
+                startDate = new Date(year, month - 1, 1);
+                endDate = new Date(year, month, 0, 23, 59, 59);
+            } else { // 'range'
+                startDate = new Date(dom.startDateFilter.value + 'T00:00:00');
+                endDate = new Date(dom.endDateFilter.value + 'T23:59:59');
+            }
             
             dom.rekapTable.classList.add('hidden');
             dom.emptyState.classList.add('hidden');
@@ -444,30 +501,36 @@
             if (unsubscribes.submissions) unsubscribes.submissions();
             unsubscribes.submissions = onSnapshot(q, (snapshot) => {
                 const submissions = snapshot.docs.map(doc => doc.data());
-                compileData(submissions);
+                compileData(submissions, startDate, endDate);
             }, (error) => {
                 console.error("Error fetching submissions:", error);
-                compileData([]);
+                compileData([], startDate, endDate);
             });
         }
 
-        function compileData(submissions) {
+        function compileData(submissions, periodStartDate, periodEndDate) {
             compiledRecapData = [];
 
-            for (const student of allStudents) {
+            // Filter students by the activeClassFilter before processing
+            const studentsToProcess = activeClassFilter !== null 
+                ? allStudents.filter(s => s.class === activeClassFilter) 
+                : allStudents;
+
+            for (const student of studentsToProcess) {
                 const studentSubmissions = submissions.filter(s => s.namaSantri1 === student.name || s.namaSantri2 === student.name || s.namaSantri3 === student.name);
 
                 const form1Submissions = studentSubmissions
-                    .filter(s => s.formType === 'form1')
+                    .filter(s => s.formType === 'form1' && s.timestamp?.toDate() >= periodStartDate && s.timestamp?.toDate() <= periodEndDate)
                     .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
                 const latestForm1 = form1Submissions[0] || {};
                 
                 const form2Submissions = studentSubmissions
-                    .filter(s => s.formType === 'form2')
+                    .filter(s => s.formType === 'form2' && s.timestamp?.toDate() >= periodStartDate && s.timestamp?.toDate() <= periodEndDate)
                     .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
                 const latestForm2 = form2Submissions[0] || {};
 
-                const form3Submissions = studentSubmissions.filter(s => s.formType === 'form3');
+                const form3Submissions = studentSubmissions
+                    .filter(s => s.formType === 'form3' && s.timestamp?.toDate() >= periodStartDate && s.timestamp?.toDate() <= periodEndDate);
                 const attendance = {
                     alfa: form3Submissions.filter(s => s.kehadiranHalaqoh === 'alpha').length,
                     izin: form3Submissions.filter(s => s.kehadiranHalaqoh === 'izin').length,
@@ -503,9 +566,7 @@
             dom.rekapTableBody.innerHTML = '';
 
             let dataToRender = compiledRecapData;
-            if (activeClassFilter !== 'all') {
-                dataToRender = compiledRecapData.filter(data => data.kelas === activeClassFilter);
-            }
+            // The filtering by activeClassFilter is now done in compileData, so no need here.
 
             if (dataToRender.length === 0) {
                 dom.emptyState.classList.remove('hidden');
@@ -549,6 +610,7 @@
         function populateMonthFilter() {
             const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
             const now = new Date();
+            dom.monthFilter.innerHTML = '';
             for (let i = 0; i < 12; i++) {
                 const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
                 const year = date.getFullYear();
@@ -558,17 +620,13 @@
                 option.textContent = `${months[month]} ${year}`;
                 dom.monthFilter.appendChild(option);
             }
+            // Set default to current month
+            dom.monthFilter.value = `${now.getFullYear()}-${now.getMonth() + 1}`;
         }
         
         function populateClassFilterButtons() {
             const container = dom.classFilterContainer;
-            container.innerHTML = '';
-
-            const allBtn = document.createElement('button');
-            allBtn.className = 'btn btn-secondary class-filter-btn active';
-            allBtn.textContent = 'Semua Kelas';
-            allBtn.dataset.className = 'all';
-            container.appendChild(allBtn);
+            container.innerHTML = '<p class="text-gray-400">Pilih kelas untuk melihat data:</p>'; // Added introductory text
 
             allClasses.sort((a, b) => a.name.localeCompare(b.name)).forEach(cls => {
                 const btn = document.createElement('button');
@@ -580,75 +638,142 @@
         }
 
         function exportToExcel() {
-            const dataToExport = [...compiledRecapData];
-            if (dataToExport.length === 0) return;
+            // This will hold data for ALL classes for export
+            // Re-run compileData for all students, ignoring the activeClassFilter
+            // This ensures all students within the date range are included in the export.
+            let startDate, endDate;
+            const filterType = dom.filterType.value;
 
-            dataToExport.sort((a, b) => {
-                if (a.kelas < b.kelas) return -1;
-                if (a.kelas > b.kelas) return 1;
-                return a.namaSantri.localeCompare(b.namaSantri);
-            });
-
-            const wb = XLSX.utils.book_new();
-
-            const dataByClass = {};
-            for (const studentData of dataToExport) {
-                const className = studentData.kelas || 'Tanpa Kelas';
-                if (!dataByClass[className]) {
-                    dataByClass[className] = [];
-                }
-                dataByClass[className].push(studentData);
+            if (filterType === 'month') {
+                const [year, month] = dom.monthFilter.value.split('-').map(Number);
+                startDate = new Date(year, month - 1, 1);
+                endDate = new Date(year, month, 0, 23, 59, 59);
+            } else { // 'range'
+                startDate = new Date(dom.startDateFilter.value + 'T00:00:00');
+                endDate = new Date(dom.endDateFilter.value + 'T23:59:59');
             }
 
-            const headers = ["No", "Nama Santri", "Kelas", "Nama Pembimbing", "Total Hafalan", "Hafalan Terakhir", "Jml Halaman Ziyadah", "Jml Halaman Murojaah", "Nilai Itqon", "Nilai Tajwid", "Alfa", "Izin", "Sakit", "Jumlah Hafalan Tasmi", "Hasil Terakhir Tasmi", "Tanggal Terakhir Tasmi"];
-            
-            const sortedClasses = Object.keys(dataByClass).sort();
+            const submissionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'formSubmissions');
+            const q = query(submissionsRef, where('timestamp', '>=', Timestamp.fromDate(startDate)), where('timestamp', '<=', Timestamp.fromDate(endDate)));
 
-            for (const className of sortedClasses) {
-                const classData = dataByClass[className];
+            getDocs(q).then(snapshot => {
+                const submissions = snapshot.docs.map(doc => doc.data());
                 
-                const rows = classData.map((d, i) => [
-                    i + 1, d.namaSantri, d.kelas, d.namaPembimbing, d.totalHafalan, d.hafalanTerakhir,
-                    d.ziyadah, d.murojaah, d.nilaiItqon, d.nilaiTajwid,
-                    d.alfa, d.izin, d.sakit, d.jumlahHafalanTasmi, d.hasilTasmi, d.tanggalTasmi
-                ]);
+                // Create a temporary compiled data for export, processing all students
+                const tempCompiledDataForExport = [];
+                for (const student of allStudents) { // Iterate over ALL students
+                    const studentSubmissions = submissions.filter(s => s.namaSantri1 === student.name || s.namaSantri2 === student.name || s.namaSantri3 === student.name);
 
-                const sheetData = [headers, ...rows];
-                const ws = XLSX.utils.aoa_to_sheet(sheetData);
-                XLSX.utils.book_append_sheet(wb, ws, className);
-            }
+                    const form1Submissions = studentSubmissions
+                        .filter(s => s.formType === 'form1')
+                        .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
+                    const latestForm1 = form1Submissions[0] || {};
+                    
+                    const form2Submissions = studentSubmissions
+                        .filter(s => s.formType === 'form2')
+                        .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
+                    const latestForm2 = form2Submissions[0] || {};
 
-            const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-            const [year, monthIndex] = dom.monthFilter.value.split('-');
-            const monthName = months[parseInt(monthIndex) - 1];
-            const fileName = `Rekap Santri - ${monthName} ${year}.xlsx`;
+                    const form3Submissions = studentSubmissions.filter(s => s.formType === 'form3');
+                    const attendance = {
+                        alfa: form3Submissions.filter(s => s.kehadiranHalaqoh === 'alpha').length,
+                        izin: form3Submissions.filter(s => s.kehadiranHalaqoh === 'izin').length,
+                        sakit: form3Submissions.filter(s => s.kehadiranHalaqoh === 'sakit').length,
+                    };
 
-            XLSX.writeFile(wb, fileName);
+                    const group = allHalaqohGroups.find(g => g.studentIds?.includes(student.id));
+                    const mentor = allMentors.find(m => m.id === group?.mentorId);
+
+                    tempCompiledDataForExport.push({
+                        namaSantri: student.name,
+                        kelas: student.class || '-',
+                        namaPembimbing: mentor?.name || latestForm1.namaPembimbing1 || '-',
+                        totalHafalan: latestForm1.totalHafalan1 || '-',
+                        hafalanTerakhir: latestForm1.hafalanTerakhir1 || '-',
+                        ziyadah: latestForm1.ziyadahPages1 ? `${latestForm1.ziyadahPages1} Halaman` : '-',
+                        murojaah: latestForm1.murojaahPages1 ? `${latestForm1.murojaahPages1} Halaman` : '-',
+                        nilaiItqon: latestForm1.nilaiItqon1 || '-',
+                        nilaiTajwid: latestForm1.nilaiTajwid1 || '-',
+                        alfa: attendance.alfa || 0,
+                        izin: attendance.izin || 0,
+                        sakit: attendance.sakit || 0,
+                        jumlahHafalanTasmi: latestForm2.jumlahHafalanTasmi || '-',
+                        hasilTasmi: latestForm2.keteranganTasmi?.replace(/_/g, ' ') || '-',
+                        tanggalTasmi: latestForm2.timestamp?.toDate().toLocaleDateString('id-ID') || '-',
+                    });
+                }
+
+                // Proceed with export using tempCompiledDataForExport
+                tempCompiledDataForExport.sort((a, b) => {
+                    if (a.kelas < b.kelas) return -1;
+                    if (a.kelas > b.kelas) return 1;
+                    return a.namaSantri.localeCompare(b.namaSantri);
+                });
+
+                const wb = XLSX.utils.book_new();
+
+                const dataByClass = {};
+                for (const studentData of tempCompiledDataForExport) {
+                    const className = studentData.kelas || 'Tanpa Kelas';
+                    if (!dataByClass[className]) {
+                        dataByClass[className] = [];
+                    }
+                    dataByClass[className].push(studentData);
+                }
+
+                const headers = ["No", "Nama Santri", "Kelas", "Nama Pembimbing", "Total Hafalan", "Hafalan Terakhir", "Jml Halaman Ziyadah", "Jml Halaman Murojaah", "Nilai Itqon", "Nilai Tajwid", "Alfa", "Izin", "Sakit", "Jumlah Hafalan Tasmi", "Hasil Terakhir Tasmi", "Tanggal Terakhir Tasmi"];
+                
+                const sortedClasses = Object.keys(dataByClass).sort();
+
+                for (const className of sortedClasses) {
+                    const classData = dataByClass[className];
+                    
+                    const rows = classData.map((d, i) => [
+                        i + 1, d.namaSantri, d.kelas, d.namaPembimbing, d.totalHafalan, d.hafalanTerakhir,
+                        d.ziyadah, d.murojaah, d.nilaiItqon, d.nilaiTajwid,
+                        d.alfa, d.izin, d.sakit, d.jumlahHafalanTasmi, d.hasilTasmi, d.tanggalTasmi
+                    ]);
+
+                    const sheetData = [headers, ...rows];
+                    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+                    XLSX.utils.book_append_sheet(wb, ws, className);
+                }
+
+                let fileName;
+                if (filterType === 'month') {
+                    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+                    const [year, monthIndex] = dom.monthFilter.value.split('-');
+                    const monthName = months[parseInt(monthIndex) - 1];
+                    fileName = `Rekap Santri - ${monthName} ${year}.xlsx`;
+                } else {
+                    fileName = `Rekap Santri - ${dom.startDateFilter.value} s.d ${dom.endDateFilter.value}.xlsx`;
+                }
+
+                XLSX.writeFile(wb, fileName);
+            }).catch(error => {
+                console.error("Error fetching submissions for export:", error);
+                showToast("Gagal mengekspor data. Terjadi kesalahan saat mengambil submisi.", true);
+            });
         }
 
-        // --- Toast Notification Function (FIX) ---
+        // --- Toast Notification Function ---
         function showToast(message, isError = false) {
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toastMessage');
+            dom.toastMessage.textContent = message;
+            dom.toast.className = `toast ${isError ? 'bg-red-600' : 'bg-green-600'}`;
             
-            if (!toast || !toastMessage) return;
-
-            toastMessage.textContent = message;
-            toast.className = `toast ${isError ? 'bg-red-600' : 'bg-green-600'}`;
-            
-            toast.classList.add('show');
+            dom.toast.classList.add('show');
             
             setTimeout(() => {
-                toast.classList.remove('show');
+                dom.toast.classList.remove('show');
             }, 3000);
         }
 
-        // --- Modal Functions ---
-        function openDeleteDataModal() {
+        // --- Bulk Delete Functions ---
+        function openDeleteDataModal() { 
             dom.deleteDataModal.classList.add('visible');
         }
 
-        function closeDeleteDataModal() {
+        function closeDeleteDataModal() { 
             dom.deleteDataModal.classList.remove('visible');
             dom.deleteDataForm.reset();
             dom.submissionDeleteOptions.classList.add('hidden');
@@ -656,7 +781,6 @@
             dom.confirmDeleteDataBtn.innerHTML = 'Hapus Data Sekarang';
         }
 
-        // --- Bulk Delete Function (FIXED) ---
         async function handleBulkDelete(e) {
             e.preventDefault();
             const collectionsToDelete = Array.from(document.querySelectorAll('input[name="deleteOptions"]:checked')).map(cb => cb.value);
@@ -669,7 +793,6 @@
             const button = dom.confirmDeleteDataBtn;
             const originalButtonHTML = button.innerHTML;
             
-            // Set loading state
             button.disabled = true;
             button.innerHTML = `
                 <div class="flex items-center justify-center">
@@ -698,7 +821,6 @@
                             } else if (range.endsWith('y')) {
                                 startDate = new Date(now.setFullYear(now.getFullYear() - parseInt(range)));
                             }
-                            // Hapus data yang LEBIH LAMA dari tanggal yang ditentukan
                             q = query(q, where('timestamp', '<=', Timestamp.fromDate(startDate)));
                         }
                     }
@@ -733,14 +855,48 @@
                 console.error("An unexpected error occurred during deletion:", error);
                 showToast("Terjadi kesalahan yang tidak terduga.", true);
             } finally {
-                // ALWAYS reset the button state, no matter what happens
                 button.disabled = false;
                 button.innerHTML = originalButtonHTML;
             }
         }
-        
+
+
         // --- Event Listeners ---
-        dom.monthFilter.addEventListener('change', fetchRecapData);
+        dom.filterType.addEventListener('change', () => {
+            if (dom.filterType.value === 'month') {
+                dom.monthFilter.classList.remove('hidden');
+                dom.startDateFilter.classList.add('hidden');
+                dom.endDateFilter.classList.add('hidden');
+            } else {
+                dom.monthFilter.classList.add('hidden');
+                dom.startDateFilter.classList.remove('hidden');
+                dom.endDateFilter.classList.remove('hidden');
+            }
+            // Only fetch data if a class is already selected
+            if (activeClassFilter !== null) {
+                fetchRecapData(); 
+            }
+        });
+
+        dom.monthFilter.addEventListener('change', () => {
+            // Only fetch data if a class is already selected
+            if (activeClassFilter !== null) {
+                fetchRecapData(); 
+            }
+        });
+        dom.startDateFilter.addEventListener('change', () => {
+            // Only fetch data if a class is already selected
+            if (activeClassFilter !== null) {
+                fetchRecapData(); 
+            }
+        });
+        dom.endDateFilter.addEventListener('change', () => {
+            // Only fetch data if a class is already selected
+            if (activeClassFilter !== null) {
+                fetchRecapData(); 
+            }
+        });
+
         dom.exportBtn.addEventListener('click', exportToExcel);
         dom.classFilterContainer.addEventListener('click', (e) => {
             const target = e.target.closest('.class-filter-btn');
@@ -750,24 +906,47 @@
             target.classList.add('active');
 
             activeClassFilter = target.dataset.className;
-            renderTable();
+            fetchRecapData(); // Now call fetchRecapData when a class is clicked
         });
 
+        // Event listeners for the Delete Data Modal
         dom.openDeleteDataModalBtn.addEventListener('click', openDeleteDataModal);
         dom.closeDeleteDataModalBtn.addEventListener('click', closeDeleteDataModal);
         dom.deleteDataForm.addEventListener('submit', handleBulkDelete);
         
-        document.querySelector('input[value="formSubmissions"]').addEventListener('change', (e) => {
+        // Listener for the "Data Submisi Formulir" checkbox to show/hide time range options
+        document.querySelector('#deleteDataModal input[value="formSubmissions"]').addEventListener('change', (e) => {
             dom.submissionDeleteOptions.classList.toggle('hidden', !e.target.checked);
         });
 
+        // Listener for the confirmation input to enable/disable the delete button
         dom.deleteConfirmation.addEventListener('input', (e) => {
             dom.confirmDeleteDataBtn.disabled = e.target.value.trim() !== 'HAPUS';
         });
 
-        // --- Final Setup ---
-        lucide.createIcons();
-        
+
+        // --- Initial Setup ---
+        function initializePage() {
+            lucide.createIcons();
+            // Set default date range to last 30 days
+            const today = new Date();
+            const thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(today.getDate() - 29); // 29 days back + today = 30 days
+            dom.startDateFilter.value = thirtyDaysAgo.toISOString().split('T')[0];
+            dom.endDateFilter.value = today.toISOString().split('T')[0];
+
+            dom.filterType.value = 'month'; // Default to month filter
+            dom.monthFilter.classList.remove('hidden');
+            dom.startDateFilter.classList.add('hidden');
+            dom.endDateFilter.classList.add('hidden');
+
+            // Initially hide the table and show empty state/loader until a class is selected
+            dom.rekapTable.classList.add('hidden');
+            dom.rekapLoader.style.display = 'none'; // Hide loader initially
+            dom.emptyState.classList.remove('hidden'); // Show empty state initially
+        }
+
+        initializePage();
         window.addEventListener('beforeunload', () => {
             Object.values(unsubscribes).forEach(unsub => unsub && unsub());
         });
