@@ -48,6 +48,7 @@
             padding: 0.75rem 1rem;
             text-align: left;
             border-bottom: 1px solid #374151;
+            vertical-align: middle; /* Ensures rowspan content is centered vertically */
         }
 
         .rekap-table th {
@@ -504,41 +505,55 @@
             dom.rekapTable.classList.remove('hidden');
             dom.exportBtn.disabled = false;
 
-            let lastStudentName = null;
-            let studentCounter = 0;
-
-            if (activeRecapFilter !== 'tasmi') {
-                 compiledRecapData.sort((a, b) => a.namaSantri.localeCompare(b.namaSantri));
-            }
-
-            compiledRecapData.forEach((data, index) => {
-                const row = document.createElement('tr');
-                
-                if (activeRecapFilter === 'tasmi') {
-                    const isSameAsPrevious = data.namaSantri === lastStudentName;
-                    if (!isSameAsPrevious) {
-                        studentCounter++;
-                        lastStudentName = data.namaSantri;
+            if (activeRecapFilter === 'tasmi') {
+                const groupedByStudent = compiledRecapData.reduce((acc, data) => {
+                    if (!acc[data.namaSantri]) {
+                        acc[data.namaSantri] = [];
                     }
-                    
-                    row.innerHTML = `
-                        <td>${isSameAsPrevious ? '' : studentCounter}</td>
-                        <td style="border-bottom-color: ${isSameAsPrevious ? 'transparent' : '#374151'}">${isSameAsPrevious ? '' : data.namaSantri}</td>
-                        <td style="border-bottom-color: ${isSameAsPrevious ? 'transparent' : '#374151'}">${isSameAsPrevious ? '' : data.kelas}</td>
-                        <td style="border-bottom-color: ${isSameAsPrevious ? 'transparent' : '#374151'}">${isSameAsPrevious ? '' : data.namaPembimbing}</td>
-                        <td>${data.tanggalTasmi}</td>
-                        <td>${data.jumlahHafalanTasmi}</td>
-                        <td class="capitalize">${data.hasilTasmi}</td>
-                    `;
-                } else {
+                    acc[data.namaSantri].push(data);
+                    return acc;
+                }, {});
+
+                let studentCounter = 0;
+                for (const studentName in groupedByStudent) {
+                    const tasmiEntries = groupedByStudent[studentName];
+                    const rowspan = tasmiEntries.length;
+                    studentCounter++;
+
+                    tasmiEntries.forEach((entry, index) => {
+                        const row = document.createElement('tr');
+                        if (index === 0) {
+                            row.innerHTML = `
+                                <td rowspan="${rowspan}">${studentCounter}</td>
+                                <td rowspan="${rowspan}">${entry.namaSantri}</td>
+                                <td rowspan="${rowspan}">${entry.kelas}</td>
+                                <td rowspan="${rowspan}">${entry.namaPembimbing}</td>
+                                <td>${entry.tanggalTasmi}</td>
+                                <td>${entry.jumlahHafalanTasmi}</td>
+                                <td class="capitalize">${entry.hasilTasmi}</td>
+                            `;
+                        } else {
+                            row.innerHTML = `
+                                <td>${entry.tanggalTasmi}</td>
+                                <td>${entry.jumlahHafalanTasmi}</td>
+                                <td class="capitalize">${entry.hasilTasmi}</td>
+                            `;
+                        }
+                        dom.rekapTableBody.appendChild(row);
+                    });
+                }
+            } else {
+                compiledRecapData.sort((a, b) => a.namaSantri.localeCompare(b.namaSantri));
+                compiledRecapData.forEach((data, index) => {
+                    const row = document.createElement('tr');
                     let rowHTML = `<td>${index + 1}</td>`;
                     view.dataKeys.forEach(key => {
                         rowHTML += `<td class="${key === 'hasilTasmi' ? 'capitalize' : ''}">${data[key] ?? '-'}</td>`;
                     });
                     row.innerHTML = rowHTML;
-                }
-                dom.rekapTableBody.appendChild(row);
-            });
+                    dom.rekapTableBody.appendChild(row);
+                });
+            }
         }
 
 
@@ -587,7 +602,6 @@
 
             const wb = XLSX.utils.book_new();
             
-            // Group current data by class
             const dataByClass = {};
             for (const studentData of compiledRecapData) {
                 const className = studentData.kelas || 'Tanpa Kelas';
@@ -605,24 +619,30 @@
                 let rows = [];
 
                 if (activeRecapFilter === 'tasmi') {
-                    let lastStudentName = null;
                     let studentCounter = 0;
-                    classData.forEach(data => {
-                        const isSameAsPrevious = data.namaSantri === lastStudentName;
-                        if (!isSameAsPrevious) {
-                            studentCounter++;
-                            lastStudentName = data.namaSantri;
+                    const groupedByStudent = classData.reduce((acc, data) => {
+                        if (!acc[data.namaSantri]) {
+                            acc[data.namaSantri] = [];
                         }
-                        rows.push([
-                            isSameAsPrevious ? '' : studentCounter,
-                            isSameAsPrevious ? '' : data.namaSantri,
-                            isSameAsPrevious ? '' : data.kelas,
-                            isSameAsPrevious ? '' : data.namaPembimbing,
-                            data.tanggalTasmi,
-                            data.jumlahHafalanTasmi,
-                            data.hasilTasmi
-                        ]);
-                    });
+                        acc[data.namaSantri].push(data);
+                        return acc;
+                    }, {});
+
+                    for (const studentName in groupedByStudent) {
+                        const tasmiEntries = groupedByStudent[studentName];
+                        studentCounter++;
+                        tasmiEntries.forEach((entry, index) => {
+                            rows.push([
+                                index === 0 ? studentCounter : '',
+                                index === 0 ? entry.namaSantri : '',
+                                index === 0 ? entry.kelas : '',
+                                index === 0 ? entry.namaPembimbing : '',
+                                entry.tanggalTasmi,
+                                entry.jumlahHafalanTasmi,
+                                entry.hasilTasmi
+                            ]);
+                        });
+                    }
                 } else {
                     rows = classData.map((data, index) => {
                         return [index + 1, ...view.dataKeys.map(key => data[key] ?? '-')];
