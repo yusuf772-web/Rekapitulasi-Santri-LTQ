@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Perkembangan Hafalan Santri</title>
+    <title>Rekapitulasi Santri</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -20,10 +20,9 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
     <style>
-        /* Menggunakan gaya yang sama dengan Panel Admin */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #111827; /* bg-gray-900 */
+            background-color: #030712; /* Slightly darker than gray-900 for better contrast */
             color: #d1d5db; /* text-gray-300 */
         }
 
@@ -31,7 +30,7 @@
             background-color: #1f2937; /* bg-gray-800 */
             border: 1px solid #374151; /* border-gray-700 */
             border-radius: 0.75rem; /* rounded-xl */
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
         }
 
         .table-wrapper {
@@ -64,27 +63,21 @@
             background-color: #2b3546;
         }
 
-        .form-select, .form-input, .form-checkbox {
+        .form-select, .form-input {
             background-color: #374151;
             border: 1px solid #4b5563;
             color: #f9fafb;
             border-radius: 0.5rem;
+            padding: 0.625rem 1rem;
+            width: 100%;
             transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .form-select, .form-input {
-             padding: 0.625rem 1rem;
-             width: 100%;
-        }
-        .form-checkbox {
-            padding: 0.5rem;
-            color: #3b82f6;
-        }
-        .form-checkbox:focus, .form-input:focus, .form-select:focus {
+
+        .form-input:focus, .form-select:focus {
             outline: none;
             border-color: #3b82f6;
             box-shadow: 0 0 0 2px #1f2937, 0 0 0 4px #3b82f6;
         }
-
 
         .btn {
             display: inline-flex;
@@ -117,22 +110,23 @@
         .btn-secondary:hover {
             background-color: #4b5563;
         }
-
-        .btn-danger {
-            background-color: #ef4444;
-            color: white;
+        
+        .filter-btn-group button {
+             border-radius: 0;
+             border-right-width: 1px;
+             border-color: #4b5563;
         }
-        .btn-danger:hover:not(:disabled) {
-            background-color: #dc2626;
-        }
-        .btn-danger:disabled {
-            background-color: #991b1b;
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-
-        .class-filter-btn.active {
+        .filter-btn-group button:first-child { border-top-left-radius: 0.5rem; border-bottom-left-radius: 0.5rem; }
+        .filter-btn-group button:last-child { border-top-right-radius: 0.5rem; border-bottom-right-radius: 0.5rem; border-right-width: 0; }
+        
+        .filter-btn.active {
             background-color: #3b82f6;
+            color: white;
+            z-index: 10;
+        }
+        
+        .tab-btn.active {
+             background-color: #3b82f6;
             color: white;
         }
 
@@ -148,99 +142,62 @@
                 opacity: .5;
             }
         }
-        
-        .modal-backdrop {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 50;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s, visibility 0.3s;
-        }
-        .modal-backdrop.visible {
-            opacity: 1;
-            visibility: visible;
-        }
-        .modal-content {
-            background-color: #1f2937; /* bg-gray-800 */
-            padding: 1.5rem;
-            border-radius: 0.75rem;
-            width: 90%;
-            max-width: 500px;
-            transform: scale(0.95);
-            transition: transform 0.3s;
-        }
-        .modal-backdrop.visible .modal-content {
-            transform: scale(1);
-        }
-        
-        /* Gaya untuk Toast/Notifikasi */
-        .toast {
-            position: fixed;
-            top: 1.25rem;
-            right: 1.25rem;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-            transform: translateX(120%);
-            transition: transform 0.3s ease-in-out;
-            z-index: 100;
-        }
-        .toast.show {
-            transform: translateX(0);
-        }
     </style>
 </head>
 <body class="p-4 sm:p-6 lg:p-8">
 
-    <div class="max-w-7xl mx-auto">
+    <div class="max-w-full mx-auto">
         <!-- Header -->
-        <header class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+        <header class="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
             <div class="flex items-center gap-3">
                 <div class="bg-blue-600 p-2 rounded-lg">
                     <i data-lucide="bar-chart-3" class="w-6 h-6 text-white"></i>
                 </div>
-                <h1 class="text-2xl font-bold text-white">Perkembangan Hafalan Santri</h1>
+                <h1 class="text-2xl font-bold text-white">Rekapitulasi Santri</h1>
             </div>
-            <div class="flex items-center gap-4">
-                <!-- Filter Type Selection -->
-                <select id="filterType" class="form-select w-full sm:w-auto">
-                    <option value="month">Per Bulan</option>
-                    <option value="range">Rentang Waktu</option>
-                </select>
-
-                <!-- Month Filter (visible by default) -->
-                <select id="monthFilter" class="form-select w-full sm:w-48"></select>
-                
-                <!-- Date Range Filters (hidden by default) -->
-                <input type="date" id="startDateFilter" class="form-input w-full sm:w-48 hidden">
-                <input type="date" id="endDateFilter" class="form-input w-full sm:w-48 hidden">
-
-                <button id="exportBtn" class="btn btn-primary" disabled>
-                    <i data-lucide="download" class="w-4 h-4 mr-2"></i>
-                    <span>Ekspor</span>
-                </button>
-                <!-- Re-added "Hapus Data" button -->
-                <button id="openDeleteDataModalBtn" class="btn btn-danger">
-                    <i data-lucide="trash-2" class="w-4 h-4 mr-2"></i>
-                    <span>Hapus Data</span>
-                </button>
-            </div>
+            <button id="exportBtn" class="btn btn-primary" disabled>
+                <i data-lucide="download" class="w-4 h-4 mr-2"></i>
+                <span>Ekspor ke Excel</span>
+            </button>
         </header>
 
-        <!-- Class Filter Buttons -->
-        <div id="classFilterContainer" class="flex flex-wrap items-center gap-2 mb-4">
-            <p class="text-gray-400">Pilih kelas untuk melihat data:</p>
-            <!-- Tombol filter kelas akan dimasukkan di sini oleh JavaScript -->
+        <!-- Main Filters Card -->
+        <div class="card mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Filter Berdasarkan</label>
+                    <div id="filterTypeContainer" class="inline-flex rounded-md shadow-sm filter-btn-group">
+                        <button data-value="month" class="btn btn-secondary filter-btn active">Per Bulan</button>
+                        <button data-value="range" class="btn btn-secondary filter-btn">Per Tanggal</button>
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label id="dateFilterLabel" class="block text-sm font-medium text-gray-400 mb-2">Pilih Bulan & Tahun</label>
+                    <div class="flex gap-4">
+                        <select id="monthFilter" class="form-select w-full"></select>
+                        <input type="date" id="startDateFilter" class="form-input w-full hidden">
+                        <input type="date" id="endDateFilter" class="form-input w-full hidden">
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <!-- Recap Type and Class Filters Card -->
+        <div class="card mb-6">
+             <!-- Recap Type Tabs -->
+            <div id="recapFilterContainer" class="flex flex-wrap items-center gap-2 mb-4 border-b border-gray-700 pb-4">
+                 <button data-recap="perkembangan" class="btn btn-secondary tab-btn active">Rekap Perkembangan</button>
+                 <button data-recap="absen" class="btn btn-secondary tab-btn">Rekap Absen</button>
+                 <button data-recap="nilai" class="btn btn-secondary tab-btn">Rekap Nilai</button>
+                 <button data-recap="tasmi" class="btn btn-secondary tab-btn">Rekap Tasmi</button>
+            </div>
+            <!-- Class Filter Buttons -->
+            <div id="classFilterContainer" class="flex flex-wrap items-center gap-2">
+                 <p class="text-gray-400 mr-2">Semua Kelas:</p>
+                <!-- Tombol filter kelas akan dimasukkan di sini oleh JavaScript -->
+            </div>
+        </div>
+
 
         <!-- Table Card -->
         <div class="card">
@@ -253,25 +210,8 @@
                     <div class="skeleton-row"></div>
                 </div>
                 <table id="rekapTable" class="rekap-table hidden">
-                    <thead>
-                        <tr>
-                            <th>No</th>
-                            <th>Nama Santri</th>
-                            <th>Kelas</th>
-                            <th>Nama Pembimbing</th>
-                            <th>Total Hafalan</th>
-                            <th>Hafalan Terakhir</th>
-                            <th>Jml Halaman Ziyadah</th>
-                            <th>Jml Halaman Murojaah</th>
-                            <th>Nilai Itqon</th>
-                            <th>Nilai Tajwid</th>
-                            <th>Alfa</th>
-                            <th>Izin</th>
-                            <th>Sakit</th>
-                            <th>Jumlah Hafalan Tasmi</th>
-                            <th>Hasil Terakhir Tasmi</th>
-                            <th>Tanggal Terakhir Tasmi</th>
-                        </tr>
+                    <thead id="rekapTableHead">
+                        <!-- Header will be injected by JavaScript -->
                     </thead>
                     <tbody id="rekapTableBody">
                         <!-- Rows will be injected by JavaScript -->
@@ -280,88 +220,17 @@
                  <div id="emptyState" class="hidden text-center py-16">
                     <i data-lucide="folder-search" class="w-16 h-16 mx-auto text-gray-500"></i>
                     <p class="mt-4 text-lg font-semibold">Tidak Ada Data</p>
-                    <p class="text-gray-400">Tidak ada data yang ditemukan untuk filter yang dipilih.</p>
+                    <p class="text-gray-400">Pilih kelas untuk menampilkan data atau tidak ada data pada periode ini.</p>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Toast Notification -->
-    <div id="toast" class="toast">
-        <p id="toastMessage"></p>
-    </div>
-
-    <!-- Bulk Delete Modal (re-added) -->
-    <div id="deleteDataModal" class="modal-backdrop">
-        <div class="modal-content">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-white">Hapus Data Massal</h3>
-                <button id="closeDeleteDataModalBtn" class="p-1 rounded-full hover:bg-gray-700">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            <form id="deleteDataForm" class="space-y-4">
-                <p class="text-sm text-yellow-400 bg-yellow-900/30 p-3 rounded-lg flex items-start gap-2">
-                    <i data-lucide="alert-triangle" class="w-4 h-4 mt-0.5 flex-shrink-0"></i>
-                    <span>Peringatan: Tindakan ini tidak dapat dibatalkan. Data yang dihapus akan hilang secara permanen.</span>
-                </p>
-                
-                <div class="space-y-2">
-                    <label class="font-semibold block">Pilih data yang ingin dihapus:</label>
-                    <!-- Checkboxes for all data types as per image -->
-                    <label class="flex items-center gap-2 p-2 rounded-md hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" name="deleteOptions" value="mentors" class="form-checkbox"> Data Pembimbing</label>
-                    <label class="flex items-center gap-2 p-2 rounded-md hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" name="deleteOptions" value="classes" class="form-checkbox"> Data Kelas</label>
-                    <label class="flex items-center gap-2 p-2 rounded-md hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" name="deleteOptions" value="students" class="form-checkbox"> Data Santri</label>
-                    <label class="flex items-center gap-2 p-2 rounded-md hover:bg-gray-700/50 cursor-pointer"><input type="checkbox" name="deleteOptions" value="formSubmissions" class="form-checkbox"> Data Submisi Formulir</label>
-                </div>
-
-                <div id="submissionDeleteOptions" class="hidden pl-6 space-y-2 border-l-2 border-gray-600">
-                    <label for="deleteTimeRange" class="block text-sm font-medium">Pilih rentang waktu untuk hapus submisi:</label>
-                    <select id="deleteTimeRange" class="form-select">
-                        <option value="all">Semua Submisi</option>
-                        <option value="2m">2 Bulan Terakhir</option>
-                        <option value="3m">3 Bulan Terakhir</option>
-                        <option value="5m">5 Bulan Terakhir</option>
-                        <option value="1y">1 Tahun Terakhir</option>
-                    </select>
-                </div>
-
-                <div class="pt-2">
-                    <label for="deleteConfirmation" class="block font-semibold">Untuk konfirmasi, ketik "HAPUS" di bawah ini:</label>
-                    <input type="text" id="deleteConfirmation" class="form-input mt-1" placeholder="HAPUS">
-                </div>
-
-                <div class="flex justify-end pt-4">
-                    <button type="submit" id="confirmDeleteDataBtn" class="btn btn-danger w-full" disabled>
-                        Hapus Data Sekarang
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
 
     <script type="module">
         // --- Firebase SDK Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query, where, doc, Timestamp, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // --- Utility Functions ---
-        function toLocalDateString(date) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        }
-
-        function getMonthName(monthIndex) {
-            const months = [
-                "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-                "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-            ];
-            return months[parseInt(monthIndex, 10)];
-        }
+        import { getFirestore, collection, onSnapshot, query, where, Timestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Configuration ---
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -388,30 +257,48 @@
         let allHalaqohGroups = [];
         let allClasses = [];
         let compiledRecapData = [];
-        let activeClassFilter = null; // Changed to null, no default 'all' filter active initially
+        let activeClassFilter = null;
+        let activeRecapFilter = 'perkembangan';
 
         // --- DOM Elements ---
         const dom = {
-            filterType: document.getElementById('filterType'),
+            filterTypeContainer: document.getElementById('filterTypeContainer'),
             monthFilter: document.getElementById('monthFilter'),
             startDateFilter: document.getElementById('startDateFilter'),
             endDateFilter: document.getElementById('endDateFilter'),
+            dateFilterLabel: document.getElementById('dateFilterLabel'),
             exportBtn: document.getElementById('exportBtn'),
             rekapTable: document.getElementById('rekapTable'),
+            rekapTableHead: document.getElementById('rekapTableHead'),
             rekapTableBody: document.getElementById('rekapTableBody'),
             rekapLoader: document.getElementById('rekapLoader'),
             emptyState: document.getElementById('emptyState'),
             classFilterContainer: document.getElementById('classFilterContainer'),
-            toast: document.getElementById('toast'),
-            toastMessage: document.getElementById('toastMessage'),
-            // Re-added delete modal elements
-            openDeleteDataModalBtn: document.getElementById('openDeleteDataModalBtn'),
-            deleteDataModal: document.getElementById('deleteDataModal'),
-            closeDeleteDataModalBtn: document.getElementById('closeDeleteDataModalBtn'),
-            deleteDataForm: document.getElementById('deleteDataForm'),
-            submissionDeleteOptions: document.getElementById('submissionDeleteOptions'),
-            deleteConfirmation: document.getElementById('deleteConfirmation'),
-            confirmDeleteDataBtn: document.getElementById('confirmDeleteDataBtn'),
+            recapFilterContainer: document.getElementById('recapFilterContainer'),
+        };
+        
+        // --- Recap View Configuration ---
+        const recapViews = {
+            perkembangan: {
+                title: "Rekap Perkembangan",
+                columns: ["No", "Nama Santri", "Kelas", "Nama Pembimbing", "Total Hafalan", "Hafalan Terakhir", "Jml Halaman Ziyadah", "Jml Halaman Murojaah", "Nilai Itqon", "Nilai Tajwid", "Alfa", "Izin", "Sakit", "Jumlah Hafalan Tasmi", "Hasil Terakhir Tasmi", "Tanggal Terakhir Tasmi"],
+                dataKeys: ["namaSantri", "kelas", "namaPembimbing", "totalHafalan", "hafalanTerakhir", "ziyadah", "murojaah", "nilaiItqon", "nilaiTajwid", "alfa", "izin", "sakit", "jumlahHafalanTasmi", "hasilTasmi", "tanggalTasmi"]
+            },
+            absen: {
+                title: "Rekap Absen",
+                columns: ["No", "Nama Santri", "Kelas", "Nama Pembimbing", "Alfa", "Izin", "Sakit"],
+                dataKeys: ["namaSantri", "kelas", "namaPembimbing", "alfa", "izin", "sakit"]
+            },
+            nilai: {
+                title: "Rekap Nilai",
+                columns: ["No", "Nama Santri", "Kelas", "Nama Pembimbing", "Rata-rata Itqon", "Rata-rata Tajwid"],
+                dataKeys: ["namaSantri", "kelas", "namaPembimbing", "avgItqon", "avgTajwid"]
+            },
+            tasmi: {
+                title: "Rekap Tasmi",
+                columns: ["No", "Nama Santri", "Kelas", "Nama Pembimbing", "Tanggal Tasmi", "Jumlah Hafalan", "Keterangan"],
+                dataKeys: ["namaSantri", "kelas", "namaPembimbing", "tanggalTasmi", "jumlahHafalanTasmi", "hasilTasmi"]
+            }
         };
 
         // --- Authentication ---
@@ -424,13 +311,11 @@
                     await (initialAuthToken ? signInWithCustomToken(auth, initialAuthToken) : signInAnonymously(auth));
                 } catch (error) {
                     console.error("Authentication error:", error);
-                    showToast("Error autentikasi: " + error.message, true);
                 }
             }
         });
 
         // --- Data Fetching and Processing ---
-
         function preloadData() {
             const collectionsToLoad = {
                 students: 'students',
@@ -456,7 +341,6 @@
                     dataLoadedCount++;
                     if (dataLoadedCount === totalCollections) {
                         populateMonthFilter();
-                        // Initial state: Hide table, show empty state, hide loader
                         dom.rekapTable.classList.add('hidden');
                         dom.rekapLoader.style.display = 'none';
                         dom.emptyState.classList.remove('hidden');
@@ -466,7 +350,6 @@
         }
 
         function fetchRecapData() {
-            // Only fetch data if a class filter is active
             if (activeClassFilter === null) {
                 dom.rekapLoader.style.display = 'none';
                 dom.emptyState.classList.remove('hidden');
@@ -476,7 +359,7 @@
             }
 
             let startDate, endDate;
-            const filterType = dom.filterType.value;
+            const filterType = document.querySelector('#filterTypeContainer .filter-btn.active').dataset.value;
 
             if (filterType === 'month') {
                 const [year, month] = dom.monthFilter.value.split('-').map(Number);
@@ -501,41 +384,37 @@
             if (unsubscribes.submissions) unsubscribes.submissions();
             unsubscribes.submissions = onSnapshot(q, (snapshot) => {
                 const submissions = snapshot.docs.map(doc => doc.data());
-                compileData(submissions, startDate, endDate);
+                compileData(submissions);
             }, (error) => {
                 console.error("Error fetching submissions:", error);
-                compileData([], startDate, endDate);
+                compileData([]);
             });
         }
 
-        function compileData(submissions, periodStartDate, periodEndDate) {
+        function compileData(submissions) {
             compiledRecapData = [];
-
-            // Filter students by the activeClassFilter before processing
-            const studentsToProcess = activeClassFilter !== null 
-                ? allStudents.filter(s => s.class === activeClassFilter) 
-                : allStudents;
+            const studentsToProcess = activeClassFilter === 'all' 
+                ? allStudents
+                : allStudents.filter(s => s.class === activeClassFilter);
 
             for (const student of studentsToProcess) {
                 const studentSubmissions = submissions.filter(s => s.namaSantri1 === student.name || s.namaSantri2 === student.name || s.namaSantri3 === student.name);
 
-                const form1Submissions = studentSubmissions
-                    .filter(s => s.formType === 'form1' && s.timestamp?.toDate() >= periodStartDate && s.timestamp?.toDate() <= periodEndDate)
-                    .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
+                const form1Submissions = studentSubmissions.filter(s => s.formType === 'form1').sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
                 const latestForm1 = form1Submissions[0] || {};
                 
-                const form2Submissions = studentSubmissions
-                    .filter(s => s.formType === 'form2' && s.timestamp?.toDate() >= periodStartDate && s.timestamp?.toDate() <= periodEndDate)
-                    .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
+                const form2Submissions = studentSubmissions.filter(s => s.formType === 'form2').sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
                 const latestForm2 = form2Submissions[0] || {};
-
-                const form3Submissions = studentSubmissions
-                    .filter(s => s.formType === 'form3' && s.timestamp?.toDate() >= periodStartDate && s.timestamp?.toDate() <= periodEndDate);
+                
+                const form3Submissions = studentSubmissions.filter(s => s.formType === 'form3');
                 const attendance = {
                     alfa: form3Submissions.filter(s => s.kehadiranHalaqoh === 'alpha').length,
                     izin: form3Submissions.filter(s => s.kehadiranHalaqoh === 'izin').length,
                     sakit: form3Submissions.filter(s => s.kehadiranHalaqoh === 'sakit').length,
                 };
+                
+                const itqonScores = form1Submissions.map(s => parseFloat(s.nilaiItqon1)).filter(n => !isNaN(n));
+                const tajwidScores = form1Submissions.map(s => parseFloat(s.nilaiTajwid1)).filter(n => !isNaN(n));
 
                 const group = allHalaqohGroups.find(g => g.studentIds?.includes(student.id));
                 const mentor = allMentors.find(m => m.id === group?.mentorId);
@@ -556,6 +435,8 @@
                     jumlahHafalanTasmi: latestForm2.jumlahHafalanTasmi || '-',
                     hasilTasmi: latestForm2.keteranganTasmi?.replace(/_/g, ' ') || '-',
                     tanggalTasmi: latestForm2.timestamp?.toDate().toLocaleDateString('id-ID') || '-',
+                    avgItqon: itqonScores.length > 0 ? (itqonScores.reduce((a, b) => a + b, 0) / itqonScores.length).toFixed(2) : '-',
+                    avgTajwid: tajwidScores.length > 0 ? (tajwidScores.reduce((a, b) => a + b, 0) / tajwidScores.length).toFixed(2) : '-',
                 });
             }
             renderTable();
@@ -563,12 +444,17 @@
 
         function renderTable() {
             dom.rekapLoader.style.display = 'none';
+            
+            const view = recapViews[activeRecapFilter];
+            if (!view) return;
+
+            // Render Header
+            dom.rekapTableHead.innerHTML = `<tr>${view.columns.map(col => `<th>${col}</th>`).join('')}</tr>`;
+            
+            // Render Body
             dom.rekapTableBody.innerHTML = '';
-
-            let dataToRender = compiledRecapData;
-            // The filtering by activeClassFilter is now done in compileData, so no need here.
-
-            if (dataToRender.length === 0) {
+            
+            if (compiledRecapData.length === 0) {
                 dom.emptyState.classList.remove('hidden');
                 dom.rekapTable.classList.add('hidden');
                 dom.exportBtn.disabled = true;
@@ -579,30 +465,16 @@
             dom.rekapTable.classList.remove('hidden');
             dom.exportBtn.disabled = false;
 
-            dataToRender.sort((a, b) => a.namaSantri.localeCompare(b.namaSantri));
+            compiledRecapData.sort((a, b) => a.namaSantri.localeCompare(b.namaSantri));
             
-            dataToRender.forEach((data, index) => {
-                const row = `
-                    <tr>
-                        <td>${index + 1}</td>
-                        <td>${data.namaSantri}</td>
-                        <td>${data.kelas}</td>
-                        <td>${data.namaPembimbing}</td>
-                        <td>${data.totalHafalan}</td>
-                        <td>${data.hafalanTerakhir}</td>
-                        <td>${data.ziyadah}</td>
-                        <td>${data.murojaah}</td>
-                        <td>${data.nilaiItqon}</td>
-                        <td>${data.nilaiTajwid}</td>
-                        <td>${data.alfa}</td>
-                        <td>${data.izin}</td>
-                        <td>${data.sakit}</td>
-                        <td>${data.jumlahHafalanTasmi}</td>
-                        <td class="capitalize">${data.hasilTasmi}</td>
-                        <td>${data.tanggalTasmi}</td>
-                    </tr>
-                `;
-                dom.rekapTableBody.innerHTML += row;
+            compiledRecapData.forEach((data, index) => {
+                const row = document.createElement('tr');
+                let rowHTML = `<td>${index + 1}</td>`;
+                view.dataKeys.forEach(key => {
+                    rowHTML += `<td class="${key === 'hasilTasmi' ? 'capitalize' : ''}">${data[key] ?? '-'}</td>`;
+                });
+                row.innerHTML = rowHTML;
+                dom.rekapTableBody.appendChild(row);
             });
         }
 
@@ -620,13 +492,18 @@
                 option.textContent = `${months[month]} ${year}`;
                 dom.monthFilter.appendChild(option);
             }
-            // Set default to current month
             dom.monthFilter.value = `${now.getFullYear()}-${now.getMonth() + 1}`;
         }
         
         function populateClassFilterButtons() {
             const container = dom.classFilterContainer;
-            container.innerHTML = '<p class="text-gray-400">Pilih kelas untuk melihat data:</p>'; // Added introductory text
+            container.innerHTML = '<p class="text-gray-400 mr-2">Semua Kelas:</p>';
+            
+            const allBtn = document.createElement('button');
+            allBtn.className = 'btn btn-secondary class-filter-btn';
+            allBtn.textContent = 'Semua';
+            allBtn.dataset.className = 'all';
+            container.appendChild(allBtn);
 
             allClasses.sort((a, b) => a.name.localeCompare(b.name)).forEach(cls => {
                 const btn = document.createElement('button');
@@ -638,11 +515,10 @@
         }
 
         function exportToExcel() {
-            // This will hold data for ALL classes for export
-            // Re-run compileData for all students, ignoring the activeClassFilter
-            // This ensures all students within the date range are included in the export.
+            // This function will now export data for ALL students regardless of the selected class filter,
+            // but will respect the selected date range.
             let startDate, endDate;
-            const filterType = dom.filterType.value;
+            const filterType = document.querySelector('#filterTypeContainer .filter-btn.active').dataset.value;
 
             if (filterType === 'month') {
                 const [year, month] = dom.monthFilter.value.split('-').map(Number);
@@ -659,28 +535,23 @@
             getDocs(q).then(snapshot => {
                 const submissions = snapshot.docs.map(doc => doc.data());
                 
-                // Create a temporary compiled data for export, processing all students
                 const tempCompiledDataForExport = [];
                 for (const student of allStudents) { // Iterate over ALL students
-                    const studentSubmissions = submissions.filter(s => s.namaSantri1 === student.name || s.namaSantri2 === student.name || s.namaSantri3 === student.name);
+                     const studentSubmissions = submissions.filter(s => s.namaSantri1 === student.name || s.namaSantri2 === student.name || s.namaSantri3 === student.name);
 
-                    const form1Submissions = studentSubmissions
-                        .filter(s => s.formType === 'form1')
-                        .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
+                    const form1Submissions = studentSubmissions.filter(s => s.formType === 'form1').sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
                     const latestForm1 = form1Submissions[0] || {};
                     
-                    const form2Submissions = studentSubmissions
-                        .filter(s => s.formType === 'form2')
-                        .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
+                    const form2Submissions = studentSubmissions.filter(s => s.formType === 'form2').sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
                     const latestForm2 = form2Submissions[0] || {};
-
+                    
                     const form3Submissions = studentSubmissions.filter(s => s.formType === 'form3');
                     const attendance = {
                         alfa: form3Submissions.filter(s => s.kehadiranHalaqoh === 'alpha').length,
                         izin: form3Submissions.filter(s => s.kehadiranHalaqoh === 'izin').length,
                         sakit: form3Submissions.filter(s => s.kehadiranHalaqoh === 'sakit').length,
                     };
-
+                    
                     const group = allHalaqohGroups.find(g => g.studentIds?.includes(student.id));
                     const mentor = allMentors.find(m => m.id === group?.mentorId);
 
@@ -703,7 +574,6 @@
                     });
                 }
 
-                // Proceed with export using tempCompiledDataForExport
                 tempCompiledDataForExport.sort((a, b) => {
                     if (a.kelas < b.kelas) return -1;
                     if (a.kelas > b.kelas) return 1;
@@ -711,7 +581,6 @@
                 });
 
                 const wb = XLSX.utils.book_new();
-
                 const dataByClass = {};
                 for (const studentData of tempCompiledDataForExport) {
                     const className = studentData.kelas || 'Tanpa Kelas';
@@ -721,8 +590,7 @@
                     dataByClass[className].push(studentData);
                 }
 
-                const headers = ["No", "Nama Santri", "Kelas", "Nama Pembimbing", "Total Hafalan", "Hafalan Terakhir", "Jml Halaman Ziyadah", "Jml Halaman Murojaah", "Nilai Itqon", "Nilai Tajwid", "Alfa", "Izin", "Sakit", "Jumlah Hafalan Tasmi", "Hasil Terakhir Tasmi", "Tanggal Terakhir Tasmi"];
-                
+                const headers = recapViews.perkembangan.columns.slice(1); // Use all columns from 'perkembangan' view
                 const sortedClasses = Object.keys(dataByClass).sort();
 
                 for (const className of sortedClasses) {
@@ -734,9 +602,9 @@
                         d.alfa, d.izin, d.sakit, d.jumlahHafalanTasmi, d.hasilTasmi, d.tanggalTasmi
                     ]);
 
-                    const sheetData = [headers, ...rows];
+                    const sheetData = [recapViews.perkembangan.columns, ...rows];
                     const ws = XLSX.utils.aoa_to_sheet(sheetData);
-                    XLSX.utils.book_append_sheet(wb, ws, className);
+                    XLSX.utils.book_append_sheet(wb, ws, className.replace(/[/\\?*:[\]]/g, '')); // Sanitize sheet name
                 }
 
                 let fileName;
@@ -752,152 +620,41 @@
                 XLSX.writeFile(wb, fileName);
             }).catch(error => {
                 console.error("Error fetching submissions for export:", error);
-                showToast("Gagal mengekspor data. Terjadi kesalahan saat mengambil submisi.", true);
             });
         }
-
-        // --- Toast Notification Function ---
-        function showToast(message, isError = false) {
-            dom.toastMessage.textContent = message;
-            dom.toast.className = `toast ${isError ? 'bg-red-600' : 'bg-green-600'}`;
-            
-            dom.toast.classList.add('show');
-            
-            setTimeout(() => {
-                dom.toast.classList.remove('show');
-            }, 3000);
-        }
-
-        // --- Bulk Delete Functions ---
-        function openDeleteDataModal() { 
-            dom.deleteDataModal.classList.add('visible');
-        }
-
-        function closeDeleteDataModal() { 
-            dom.deleteDataModal.classList.remove('visible');
-            dom.deleteDataForm.reset();
-            dom.submissionDeleteOptions.classList.add('hidden');
-            dom.confirmDeleteDataBtn.disabled = true;
-            dom.confirmDeleteDataBtn.innerHTML = 'Hapus Data Sekarang';
-        }
-
-        async function handleBulkDelete(e) {
-            e.preventDefault();
-            const collectionsToDelete = Array.from(document.querySelectorAll('input[name="deleteOptions"]:checked')).map(cb => cb.value);
-            
-            if (collectionsToDelete.length === 0) {
-                showToast("Pilih setidaknya satu jenis data untuk dihapus.", true);
-                return;
-            }
-
-            const button = dom.confirmDeleteDataBtn;
-            const originalButtonHTML = button.innerHTML;
-            
-            button.disabled = true;
-            button.innerHTML = `
-                <div class="flex items-center justify-center">
-                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Menghapus...</span>
-                </div>
-            `;
-
-            try {
-                let totalDeleted = 0;
-                let errors = [];
-
-                for (const collectionName of collectionsToDelete) {
-                    let q = collection(db, 'artifacts', appId, 'public', 'data', collectionName);
-
-                    if (collectionName === 'formSubmissions') {
-                        const range = document.getElementById('deleteTimeRange').value;
-                        if (range !== 'all') {
-                            const now = new Date();
-                            let startDate;
-                            if (range.endsWith('m')) {
-                                startDate = new Date(now.setMonth(now.getMonth() - parseInt(range)));
-                            } else if (range.endsWith('y')) {
-                                startDate = new Date(now.setFullYear(now.getFullYear() - parseInt(range)));
-                            }
-                            q = query(q, where('timestamp', '<=', Timestamp.fromDate(startDate)));
-                        }
-                    }
-                    
-                    try {
-                        const snapshot = await getDocs(q);
-                        if (snapshot.size > 0) {
-                           const batch = writeBatch(db);
-                           snapshot.docs.forEach(doc => batch.delete(doc.ref));
-                           await batch.commit();
-                           totalDeleted += snapshot.size;
-                        }
-                    } catch (err) {
-                        console.error(`Error deleting collection ${collectionName}:`, err);
-                        errors.push(collectionName);
-                    }
-                }
-
-                if (errors.length > 0) {
-                    showToast(`Gagal menghapus beberapa data: ${errors.join(', ')}.`, true);
-                }
-                if (totalDeleted > 0) {
-                    showToast(`${totalDeleted} item berhasil dihapus secara permanen.`);
-                }
-                if (totalDeleted === 0 && errors.length === 0) {
-                     showToast(`Tidak ada data yang cocok untuk dihapus.`);
-                }
-                
-                closeDeleteDataModal();
-
-            } catch (error) {
-                console.error("An unexpected error occurred during deletion:", error);
-                showToast("Terjadi kesalahan yang tidak terduga.", true);
-            } finally {
-                button.disabled = false;
-                button.innerHTML = originalButtonHTML;
-            }
-        }
-
-
+        
         // --- Event Listeners ---
-        dom.filterType.addEventListener('change', () => {
-            if (dom.filterType.value === 'month') {
+        dom.filterTypeContainer.addEventListener('click', (e) => {
+            const target = e.target.closest('.filter-btn');
+            if (!target) return;
+            
+            dom.filterTypeContainer.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            target.classList.add('active');
+            
+            const filterType = target.dataset.value;
+
+            if (filterType === 'month') {
+                dom.dateFilterLabel.textContent = 'Pilih Bulan & Tahun';
                 dom.monthFilter.classList.remove('hidden');
                 dom.startDateFilter.classList.add('hidden');
                 dom.endDateFilter.classList.add('hidden');
             } else {
+                dom.dateFilterLabel.textContent = 'Pilih Rentang Tanggal';
                 dom.monthFilter.classList.add('hidden');
                 dom.startDateFilter.classList.remove('hidden');
                 dom.endDateFilter.classList.remove('hidden');
             }
-            // Only fetch data if a class is already selected
-            if (activeClassFilter !== null) {
-                fetchRecapData(); 
-            }
+            if (activeClassFilter !== null) fetchRecapData();
         });
 
-        dom.monthFilter.addEventListener('change', () => {
-            // Only fetch data if a class is already selected
-            if (activeClassFilter !== null) {
-                fetchRecapData(); 
-            }
-        });
-        dom.startDateFilter.addEventListener('change', () => {
-            // Only fetch data if a class is already selected
-            if (activeClassFilter !== null) {
-                fetchRecapData(); 
-            }
-        });
-        dom.endDateFilter.addEventListener('change', () => {
-            // Only fetch data if a class is already selected
-            if (activeClassFilter !== null) {
-                fetchRecapData(); 
-            }
+        [dom.monthFilter, dom.startDateFilter, dom.endDateFilter].forEach(el => {
+            el.addEventListener('change', () => {
+                if (activeClassFilter !== null) fetchRecapData();
+            });
         });
 
         dom.exportBtn.addEventListener('click', exportToExcel);
+        
         dom.classFilterContainer.addEventListener('click', (e) => {
             const target = e.target.closest('.class-filter-btn');
             if (!target) return;
@@ -906,44 +663,30 @@
             target.classList.add('active');
 
             activeClassFilter = target.dataset.className;
-            fetchRecapData(); // Now call fetchRecapData when a class is clicked
+            fetchRecapData();
         });
-
-        // Event listeners for the Delete Data Modal
-        dom.openDeleteDataModalBtn.addEventListener('click', openDeleteDataModal);
-        dom.closeDeleteDataModalBtn.addEventListener('click', closeDeleteDataModal);
-        dom.deleteDataForm.addEventListener('submit', handleBulkDelete);
         
-        // Listener for the "Data Submisi Formulir" checkbox to show/hide time range options
-        document.querySelector('#deleteDataModal input[value="formSubmissions"]').addEventListener('change', (e) => {
-            dom.submissionDeleteOptions.classList.toggle('hidden', !e.target.checked);
+        dom.recapFilterContainer.addEventListener('click', (e) => {
+             const target = e.target.closest('.tab-btn');
+            if (!target) return;
+            
+            dom.recapFilterContainer.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            target.classList.add('active');
+            
+            activeRecapFilter = target.dataset.recap;
+            renderTable(); // Re-render table with existing data for the new view
         });
-
-        // Listener for the confirmation input to enable/disable the delete button
-        dom.deleteConfirmation.addEventListener('input', (e) => {
-            dom.confirmDeleteDataBtn.disabled = e.target.value.trim() !== 'HAPUS';
-        });
-
 
         // --- Initial Setup ---
         function initializePage() {
             lucide.createIcons();
-            // Set default date range to last 30 days
             const today = new Date();
             const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(today.getDate() - 29); // 29 days back + today = 30 days
+            thirtyDaysAgo.setDate(today.getDate() - 29);
             dom.startDateFilter.value = thirtyDaysAgo.toISOString().split('T')[0];
             dom.endDateFilter.value = today.toISOString().split('T')[0];
-
-            dom.filterType.value = 'month'; // Default to month filter
-            dom.monthFilter.classList.remove('hidden');
-            dom.startDateFilter.classList.add('hidden');
-            dom.endDateFilter.classList.add('hidden');
-
-            // Initially hide the table and show empty state/loader until a class is selected
-            dom.rekapTable.classList.add('hidden');
-            dom.rekapLoader.style.display = 'none'; // Hide loader initially
-            dom.emptyState.classList.remove('hidden'); // Show empty state initially
+            dom.rekapLoader.style.display = 'none';
+            dom.emptyState.classList.remove('hidden');
         }
 
         initializePage();
