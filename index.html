@@ -392,10 +392,6 @@
         }
         
         // --- Data Compilation ---
-        
-        /**
-         * Main dispatcher for data compilation based on the active tab.
-         */
         function compileData(submissions) {
             if (activeRecapFilter === 'tasmi') {
                 compileTasmiData(submissions);
@@ -405,10 +401,6 @@
             renderTable();
         }
 
-        /**
-         * Compiles data for the "Rekap Tasmi" view.
-         * It creates an entry for each tasmi submission, not one per student.
-         */
         function compileTasmiData(submissions) {
             compiledRecapData = [];
             const tasmiSubmissions = submissions.filter(s => s.formType === 'form2');
@@ -417,7 +409,6 @@
                 const student = allStudents.find(s => s.name === submission.namaSantri2);
                 if (!student) continue;
 
-                // Filter by the active class
                 if (activeClassFilter !== 'all' && student.class !== activeClassFilter) {
                     continue;
                 }
@@ -432,11 +423,10 @@
                     jumlahHafalanTasmi: submission.jumlahHafalanTasmi || '-',
                     hasilTasmi: submission.keteranganTasmi?.replace(/_/g, ' ') || '-',
                     tanggalTasmi: submission.timestamp?.toDate().toLocaleDateString('id-ID') || '-',
-                    timestamp: submission.timestamp?.toDate() || new Date(0) // For sorting
+                    timestamp: submission.timestamp?.toDate() || new Date(0)
                 });
             }
 
-            // Sort by student name, then by submission date
             compiledRecapData.sort((a, b) => {
                 if (a.namaSantri < b.namaSantri) return -1;
                 if (a.namaSantri > b.namaSantri) return 1;
@@ -444,10 +434,6 @@
             });
         }
 
-        /**
-         * Compiles data for standard views (Perkembangan, Absen, Nilai).
-         * It creates one summary entry per student.
-         */
         function compileStandardData(submissions) {
             compiledRecapData = [];
             const studentsToProcess = activeClassFilter === 'all' 
@@ -537,15 +523,14 @@
                     
                     row.innerHTML = `
                         <td>${isSameAsPrevious ? '' : studentCounter}</td>
-                        <td>${isSameAsPrevious ? '' : data.namaSantri}</td>
-                        <td>${isSameAsPrevious ? '' : data.kelas}</td>
-                        <td>${isSameAsPrevious ? '' : data.namaPembimbing}</td>
+                        <td style="border-bottom-color: ${isSameAsPrevious ? 'transparent' : '#374151'}">${isSameAsPrevious ? '' : data.namaSantri}</td>
+                        <td style="border-bottom-color: ${isSameAsPrevious ? 'transparent' : '#374151'}">${isSameAsPrevious ? '' : data.kelas}</td>
+                        <td style="border-bottom-color: ${isSameAsPrevious ? 'transparent' : '#374151'}">${isSameAsPrevious ? '' : data.namaPembimbing}</td>
                         <td>${data.tanggalTasmi}</td>
                         <td>${data.jumlahHafalanTasmi}</td>
                         <td class="capitalize">${data.hasilTasmi}</td>
                     `;
                 } else {
-                    // Standard rendering for other views
                     let rowHTML = `<td>${index + 1}</td>`;
                     view.dataKeys.forEach(key => {
                         rowHTML += `<td class="${key === 'hasilTasmi' ? 'capitalize' : ''}">${data[key] ?? '-'}</td>`;
@@ -594,110 +579,74 @@
         }
 
         function exportToExcel() {
-            let startDate, endDate;
-            const filterType = document.querySelector('#filterTypeContainer .filter-btn.active').dataset.value;
-
-            if (filterType === 'month') {
-                const [year, month] = dom.monthFilter.value.split('-').map(Number);
-                startDate = new Date(year, month - 1, 1);
-                endDate = new Date(year, month, 0, 23, 59, 59);
-            } else { // 'range'
-                startDate = new Date(dom.startDateFilter.value + 'T00:00:00');
-                endDate = new Date(dom.endDateFilter.value + 'T23:59:59');
+            const view = recapViews[activeRecapFilter];
+            if (!view || compiledRecapData.length === 0) {
+                console.log("Tidak ada data untuk diekspor.");
+                return;
             }
 
-            const submissionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'formSubmissions');
-            const q = query(submissionsRef, where('timestamp', '>=', Timestamp.fromDate(startDate)), where('timestamp', '<=', Timestamp.fromDate(endDate)));
+            const wb = XLSX.utils.book_new();
+            
+            // Group current data by class
+            const dataByClass = {};
+            for (const studentData of compiledRecapData) {
+                const className = studentData.kelas || 'Tanpa Kelas';
+                if (!dataByClass[className]) {
+                    dataByClass[className] = [];
+                }
+                dataByClass[className].push(studentData);
+            }
 
-            getDocs(q).then(snapshot => {
-                const submissions = snapshot.docs.map(doc => doc.data());
-                
-                const tempCompiledDataForExport = [];
-                for (const student of allStudents) {
-                     const studentSubmissions = submissions.filter(s => s.namaSantri1 === student.name || s.namaSantri2 === student.name || s.namaSantri3 === student.name);
+            const sortedClasses = Object.keys(dataByClass).sort();
 
-                    const form1Submissions = studentSubmissions.filter(s => s.formType === 'form1').sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
-                    const latestForm1 = form1Submissions[0] || {};
-                    
-                    const form2Submissions = studentSubmissions.filter(s => s.formType === 'form2').sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
-                    const latestForm2 = form2Submissions[0] || {};
-                    
-                    const form3Submissions = studentSubmissions.filter(s => s.formType === 'form3');
-                    const attendance = {
-                        alfa: form3Submissions.filter(s => s.kehadiranHalaqoh === 'alpha').length,
-                        izin: form3Submissions.filter(s => s.kehadiranHalaqoh === 'izin').length,
-                        sakit: form3Submissions.filter(s => s.kehadiranHalaqoh === 'sakit').length,
-                    };
-                    
-                    const group = allHalaqohGroups.find(g => g.studentIds?.includes(student.id));
-                    const mentor = allMentors.find(m => m.id === group?.mentorId);
+            for (const className of sortedClasses) {
+                const classData = dataByClass[className];
+                const headers = view.columns;
+                let rows = [];
 
-                    tempCompiledDataForExport.push({
-                        namaSantri: student.name,
-                        kelas: student.class || '-',
-                        namaPembimbing: mentor?.name || latestForm1.namaPembimbing1 || '-',
-                        totalHafalan: latestForm1.totalHafalan1 || '-',
-                        hafalanTerakhir: latestForm1.hafalanTerakhir1 || '-',
-                        ziyadah: latestForm1.ziyadahPages1 ? `${latestForm1.ziyadahPages1} Halaman` : '-',
-                        murojaah: latestForm1.murojaahPages1 ? `${latestForm1.murojaahPages1} Halaman` : '-',
-                        nilaiItqon: latestForm1.nilaiItqon1 || '-',
-                        nilaiTajwid: latestForm1.nilaiTajwid1 || '-',
-                        alfa: attendance.alfa || 0,
-                        izin: attendance.izin || 0,
-                        sakit: attendance.sakit || 0,
-                        jumlahHafalanTasmi: latestForm2.jumlahHafalanTasmi || '-',
-                        hasilTasmi: latestForm2.keteranganTasmi?.replace(/_/g, ' ') || '-',
-                        tanggalTasmi: latestForm2.timestamp?.toDate().toLocaleDateString('id-ID') || '-',
+                if (activeRecapFilter === 'tasmi') {
+                    let lastStudentName = null;
+                    let studentCounter = 0;
+                    classData.forEach(data => {
+                        const isSameAsPrevious = data.namaSantri === lastStudentName;
+                        if (!isSameAsPrevious) {
+                            studentCounter++;
+                            lastStudentName = data.namaSantri;
+                        }
+                        rows.push([
+                            isSameAsPrevious ? '' : studentCounter,
+                            isSameAsPrevious ? '' : data.namaSantri,
+                            isSameAsPrevious ? '' : data.kelas,
+                            isSameAsPrevious ? '' : data.namaPembimbing,
+                            data.tanggalTasmi,
+                            data.jumlahHafalanTasmi,
+                            data.hasilTasmi
+                        ]);
+                    });
+                } else {
+                    rows = classData.map((data, index) => {
+                        return [index + 1, ...view.dataKeys.map(key => data[key] ?? '-')];
                     });
                 }
+                
+                const sheetData = [headers, ...rows];
+                const ws = XLSX.utils.aoa_to_sheet(sheetData);
+                XLSX.utils.book_append_sheet(wb, ws, className.replace(/[/\\?*:[\]]/g, ''));
+            }
+            
+            let datePart;
+            const filterType = document.querySelector('#filterTypeContainer .filter-btn.active').dataset.value;
+            if (filterType === 'month') {
+                const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+                const [year, monthIndex] = dom.monthFilter.value.split('-');
+                const monthName = months[parseInt(monthIndex) - 1];
+                datePart = `${monthName} ${year}`;
+            } else {
+                datePart = `${dom.startDateFilter.value} s.d ${dom.endDateFilter.value}`;
+            }
+            const fileName = `${view.title} - ${datePart}.xlsx`;
 
-                tempCompiledDataForExport.sort((a, b) => {
-                    if (a.kelas < b.kelas) return -1;
-                    if (a.kelas > b.kelas) return 1;
-                    return a.namaSantri.localeCompare(b.namaSantri);
-                });
-
-                const wb = XLSX.utils.book_new();
-                const dataByClass = {};
-                for (const studentData of tempCompiledDataForExport) {
-                    const className = studentData.kelas || 'Tanpa Kelas';
-                    if (!dataByClass[className]) {
-                        dataByClass[className] = [];
-                    }
-                    dataByClass[className].push(studentData);
-                }
-
-                const headers = recapViews.perkembangan.columns.slice(1);
-                const sortedClasses = Object.keys(dataByClass).sort();
-
-                for (const className of sortedClasses) {
-                    const classData = dataByClass[className];
-                    
-                    const rows = classData.map((d, i) => [
-                        i + 1, d.namaSantri, d.kelas, d.namaPembimbing, d.totalHafalan, d.hafalanTerakhir,
-                        d.ziyadah, d.murojaah, d.nilaiItqon, d.nilaiTajwid,
-                        d.alfa, d.izin, d.sakit, d.jumlahHafalanTasmi, d.hasilTasmi, d.tanggalTasmi
-                    ]);
-
-                    const sheetData = [recapViews.perkembangan.columns, ...rows];
-                    const ws = XLSX.utils.aoa_to_sheet(sheetData);
-                    XLSX.utils.book_append_sheet(wb, ws, className.replace(/[/\\?*:[\]]/g, ''));
-                }
-
-                let fileName;
-                if (filterType === 'month') {
-                    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-                    const [year, monthIndex] = dom.monthFilter.value.split('-');
-                    const monthName = months[parseInt(monthIndex) - 1];
-                    fileName = `Rekap Santri - ${monthName} ${year}.xlsx`;
-                } else {
-                    fileName = `Rekap Santri - ${dom.startDateFilter.value} s.d ${dom.endDateFilter.value}.xlsx`;
-                }
-
-                XLSX.writeFile(wb, fileName);
-            }).catch(error => {
-                console.error("Error fetching submissions for export:", error);
-            });
+            XLSX.writeFile(wb, fileName);
         }
         
         // --- Event Listeners ---
@@ -751,11 +700,10 @@
             target.classList.add('active');
             
             activeRecapFilter = target.dataset.recap;
-            // Re-compile data for the new view if data already exists
             if (activeClassFilter !== null) {
                 fetchRecapData();
             } else {
-                renderTable(); // Just update the view if no data is loaded
+                renderTable();
             }
         });
 
