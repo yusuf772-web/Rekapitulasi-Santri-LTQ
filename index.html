@@ -390,8 +390,65 @@
                 compileData([]);
             });
         }
-
+        
+        // --- Data Compilation ---
+        
+        /**
+         * Main dispatcher for data compilation based on the active tab.
+         */
         function compileData(submissions) {
+            if (activeRecapFilter === 'tasmi') {
+                compileTasmiData(submissions);
+            } else {
+                compileStandardData(submissions);
+            }
+            renderTable();
+        }
+
+        /**
+         * Compiles data for the "Rekap Tasmi" view.
+         * It creates an entry for each tasmi submission, not one per student.
+         */
+        function compileTasmiData(submissions) {
+            compiledRecapData = [];
+            const tasmiSubmissions = submissions.filter(s => s.formType === 'form2');
+
+            for (const submission of tasmiSubmissions) {
+                const student = allStudents.find(s => s.name === submission.namaSantri2);
+                if (!student) continue;
+
+                // Filter by the active class
+                if (activeClassFilter !== 'all' && student.class !== activeClassFilter) {
+                    continue;
+                }
+
+                const group = allHalaqohGroups.find(g => g.studentIds?.includes(student.id));
+                const mentor = allMentors.find(m => m.id === group?.mentorId);
+
+                compiledRecapData.push({
+                    namaSantri: student.name,
+                    kelas: student.class || '-',
+                    namaPembimbing: mentor?.name || submission.namaPembimbing2 || '-',
+                    jumlahHafalanTasmi: submission.jumlahHafalanTasmi || '-',
+                    hasilTasmi: submission.keteranganTasmi?.replace(/_/g, ' ') || '-',
+                    tanggalTasmi: submission.timestamp?.toDate().toLocaleDateString('id-ID') || '-',
+                    timestamp: submission.timestamp?.toDate() || new Date(0) // For sorting
+                });
+            }
+
+            // Sort by student name, then by submission date
+            compiledRecapData.sort((a, b) => {
+                if (a.namaSantri < b.namaSantri) return -1;
+                if (a.namaSantri > b.namaSantri) return 1;
+                return a.timestamp - b.timestamp;
+            });
+        }
+
+        /**
+         * Compiles data for standard views (Perkembangan, Absen, Nilai).
+         * It creates one summary entry per student.
+         */
+        function compileStandardData(submissions) {
             compiledRecapData = [];
             const studentsToProcess = activeClassFilter === 'all' 
                 ? allStudents
@@ -439,21 +496,17 @@
                     avgTajwid: tajwidScores.length > 0 ? (tajwidScores.reduce((a, b) => a + b, 0) / tajwidScores.length).toFixed(2) : '-',
                 });
             }
-            renderTable();
         }
 
+        // --- Table Rendering ---
         function renderTable() {
             dom.rekapLoader.style.display = 'none';
-            
             const view = recapViews[activeRecapFilter];
             if (!view) return;
 
-            // Render Header
             dom.rekapTableHead.innerHTML = `<tr>${view.columns.map(col => `<th>${col}</th>`).join('')}</tr>`;
-            
-            // Render Body
             dom.rekapTableBody.innerHTML = '';
-            
+
             if (compiledRecapData.length === 0) {
                 dom.emptyState.classList.remove('hidden');
                 dom.rekapTable.classList.add('hidden');
@@ -465,18 +518,44 @@
             dom.rekapTable.classList.remove('hidden');
             dom.exportBtn.disabled = false;
 
-            compiledRecapData.sort((a, b) => a.namaSantri.localeCompare(b.namaSantri));
-            
+            let lastStudentName = null;
+            let studentCounter = 0;
+
+            if (activeRecapFilter !== 'tasmi') {
+                 compiledRecapData.sort((a, b) => a.namaSantri.localeCompare(b.namaSantri));
+            }
+
             compiledRecapData.forEach((data, index) => {
                 const row = document.createElement('tr');
-                let rowHTML = `<td>${index + 1}</td>`;
-                view.dataKeys.forEach(key => {
-                    rowHTML += `<td class="${key === 'hasilTasmi' ? 'capitalize' : ''}">${data[key] ?? '-'}</td>`;
-                });
-                row.innerHTML = rowHTML;
+                
+                if (activeRecapFilter === 'tasmi') {
+                    const isSameAsPrevious = data.namaSantri === lastStudentName;
+                    if (!isSameAsPrevious) {
+                        studentCounter++;
+                        lastStudentName = data.namaSantri;
+                    }
+                    
+                    row.innerHTML = `
+                        <td>${isSameAsPrevious ? '' : studentCounter}</td>
+                        <td>${isSameAsPrevious ? '' : data.namaSantri}</td>
+                        <td>${isSameAsPrevious ? '' : data.kelas}</td>
+                        <td>${isSameAsPrevious ? '' : data.namaPembimbing}</td>
+                        <td>${data.tanggalTasmi}</td>
+                        <td>${data.jumlahHafalanTasmi}</td>
+                        <td class="capitalize">${data.hasilTasmi}</td>
+                    `;
+                } else {
+                    // Standard rendering for other views
+                    let rowHTML = `<td>${index + 1}</td>`;
+                    view.dataKeys.forEach(key => {
+                        rowHTML += `<td class="${key === 'hasilTasmi' ? 'capitalize' : ''}">${data[key] ?? '-'}</td>`;
+                    });
+                    row.innerHTML = rowHTML;
+                }
                 dom.rekapTableBody.appendChild(row);
             });
         }
+
 
         // --- UI Helpers and Event Listeners ---
         function populateMonthFilter() {
@@ -515,8 +594,6 @@
         }
 
         function exportToExcel() {
-            // This function will now export data for ALL students regardless of the selected class filter,
-            // but will respect the selected date range.
             let startDate, endDate;
             const filterType = document.querySelector('#filterTypeContainer .filter-btn.active').dataset.value;
 
@@ -536,7 +613,7 @@
                 const submissions = snapshot.docs.map(doc => doc.data());
                 
                 const tempCompiledDataForExport = [];
-                for (const student of allStudents) { // Iterate over ALL students
+                for (const student of allStudents) {
                      const studentSubmissions = submissions.filter(s => s.namaSantri1 === student.name || s.namaSantri2 === student.name || s.namaSantri3 === student.name);
 
                     const form1Submissions = studentSubmissions.filter(s => s.formType === 'form1').sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0));
@@ -590,7 +667,7 @@
                     dataByClass[className].push(studentData);
                 }
 
-                const headers = recapViews.perkembangan.columns.slice(1); // Use all columns from 'perkembangan' view
+                const headers = recapViews.perkembangan.columns.slice(1);
                 const sortedClasses = Object.keys(dataByClass).sort();
 
                 for (const className of sortedClasses) {
@@ -604,7 +681,7 @@
 
                     const sheetData = [recapViews.perkembangan.columns, ...rows];
                     const ws = XLSX.utils.aoa_to_sheet(sheetData);
-                    XLSX.utils.book_append_sheet(wb, ws, className.replace(/[/\\?*:[\]]/g, '')); // Sanitize sheet name
+                    XLSX.utils.book_append_sheet(wb, ws, className.replace(/[/\\?*:[\]]/g, ''));
                 }
 
                 let fileName;
@@ -674,7 +751,12 @@
             target.classList.add('active');
             
             activeRecapFilter = target.dataset.recap;
-            renderTable(); // Re-render table with existing data for the new view
+            // Re-compile data for the new view if data already exists
+            if (activeClassFilter !== null) {
+                fetchRecapData();
+            } else {
+                renderTable(); // Just update the view if no data is loaded
+            }
         });
 
         // --- Initial Setup ---
